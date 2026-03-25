@@ -34,23 +34,26 @@ namespace MCPForUnity.Editor.Services.Server
             command = command.Replace("\r", "").Replace("\n", "");
 
 #if UNITY_EDITOR_OSX
-            // macOS: Avoid AppleScript (automation permission prompts). Use a .command script and open it.
+            // macOS: Run server as direct child process (not via Terminal.app).
+            // Terminal.app kills .command scripts on window close (shellExitAction),
+            // and `set -e` + `clear` without TERM causes immediate exit.
             string scriptsDir = Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "TerminalScripts");
             Directory.CreateDirectory(scriptsDir);
             string scriptPath = Path.Combine(scriptsDir, "mcp-terminal.command");
             File.WriteAllText(
                 scriptPath,
                 "#!/bin/bash\n" +
-                "set -e\n" +
-                "clear\n" +
+                "export TERM=${TERM:-xterm-256color}\n" +
                 $"{command}\n");
             ExecPath.TryRun("/bin/chmod", $"+x \"{scriptPath}\"", Application.dataPath, out _, out _, 3000);
             return new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "/usr/bin/open",
-                Arguments = $"-a Terminal \"{scriptPath}\"",
+                FileName = "/bin/bash",
+                Arguments = scriptPath,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false
             };
 #elif UNITY_EDITOR_WIN
             // Windows: Avoid brittle nested-quote escaping by writing a .cmd script and starting it in a new window.

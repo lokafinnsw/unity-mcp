@@ -250,6 +250,23 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
+            // If server is already running on the port and this is a quiet/auto-start (domain reload),
+            // just reuse the existing server instead of killing and restarting.
+            try
+            {
+                string httpUrlCheck = HttpEndpointUtility.GetLocalBaseUrl();
+                if (Uri.TryCreate(httpUrlCheck, UriKind.Absolute, out var uriCheck) && uriCheck.Port > 0)
+                {
+                    var existing = GetListeningProcessIdsForPort(uriCheck.Port);
+                    if (existing.Count > 0 && quiet)
+                    {
+                        McpLog.Info($"Server already running on port {uriCheck.Port} (PID: {string.Join(", ", existing)}). Skipping restart during domain reload.");
+                        return false;
+                    }
+                }
+            }
+            catch (Exception) { /* ignore check errors */ }
+
             // First, try to stop any existing server (quietly; we'll only warn if the port remains occupied).
             StopLocalHttpServerInternal(quiet: true);
 
