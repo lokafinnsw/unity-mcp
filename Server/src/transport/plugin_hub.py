@@ -95,9 +95,11 @@ class PluginHub(WebSocketEndpoint):
     SERVER_TIMEOUT = 30
     COMMAND_TIMEOUT = 30
     # Server-side ping interval (seconds) - how often to send pings to Unity
-    PING_INTERVAL = 10
+    PING_INTERVAL = 30
     # Max time (seconds) to wait for pong before considering connection dead
-    PING_TIMEOUT = 20
+    # Increased from 20s to 300s to survive domain reloads, heavy computation,
+    # and editor focus loss without killing the session.
+    PING_TIMEOUT = 300
     # Timeout (seconds) for fast-fail commands like ping/read_console/get_editor_state.
     # Keep short so MCP clients aren't blocked during Unity compilation/reload/unfocused throttling.
     FAST_FAIL_TIMEOUT = 2.0
@@ -854,19 +856,20 @@ class PluginHub(WebSocketEndpoint):
         # (e.g., via status file, heartbeat, or explicit "reloading" signal from Unity)
         # rather than blindly waiting up to 20s. See Issue #657.
         #
-        # Configurable via: UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S (default: 20.0, max: 20.0)
+        # Configurable via: UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S (default: 60.0, max: 120.0)
+        # Increased from 20s to survive full domain reloads which can take 30-60s.
         try:
             max_wait_s = float(
-                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0"))
+                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "60.0"))
         except ValueError as e:
             raw_val = os.environ.get(
-                "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0")
+                "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "60.0")
             logger.warning(
-                "Invalid UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S=%r, using default 20.0: %s",
+                "Invalid UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S=%r, using default 60.0: %s",
                 raw_val, e)
-            max_wait_s = 20.0
-        # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
-        max_wait_s = max(0.0, min(max_wait_s, 20.0))
+            max_wait_s = 60.0
+        # Clamp to [0, 120] to prevent misconfiguration from causing excessive waits
+        max_wait_s = max(0.0, min(max_wait_s, 120.0))
         if not retry_on_reload:
             max_wait_s = 0.0
         retry_ms = float(getattr(config, "reload_retry_ms", 250))
